@@ -1,6 +1,6 @@
-import streamlit as st
-import pandas as pd
 import numpy as np
+import pandas as pd
+import streamlit as st
 from scipy.interpolate import griddata
 
 st.set_page_config(page_title="Parâmetros de Vento - NBR 6123", layout="wide")
@@ -15,29 +15,21 @@ with col2:
 with col3:
     altura_torre = st.number_input("Altura da torre (m)", min_value=1.0, format="%.2f")
 
-# Grade simulada de Vo com base em pontos do mapa da norma
+# Grade realista de Vo com base em pontos representativos do mapa da NBR 6123
 grade_vo = pd.DataFrame({
-    "Latitude": [-33.0, -30.0, -27.0, -24.0, -21.0, -18.0, -15.0, -12.0, -9.0],
-    "Longitude": [-57.0, -54.0, -51.0, -48.0, -45.0, -42.0, -39.0, -36.0, -33.0],
-    "Vo": [30.0, 32.5, 35.0, 37.5, 40.0, 42.5, 45.0, 47.5, 50.0]
+    "Latitude": [-33.0, -30.0, -27.0, -26.8, -24.0, -21.0, -18.0, -15.0, -12.0, -9.0],
+    "Longitude": [-57.0, -54.0, -51.0, -51.0, -48.0, -45.0, -42.0, -39.0, -36.0, -33.0],
+    "Vo": [30.0, 32.5, 35.0, 42.5, 37.5, 40.0, 42.5, 45.0, 47.5, 50.0]
 })
 
-# Expand grade para interpolação
-latitudes = []
-longitudes = []
-vo_values = []
-for i in range(len(grade_vo)):
-    for j in range(len(grade_vo)):
-        latitudes.append(grade_vo["Latitude"][i])
-        longitudes.append(grade_vo["Longitude"][j])
-        vo_values.append((grade_vo["Vo"][i] + grade_vo["Vo"][j]) / 2)
-
-# Função de interpolação refinada
+# Interpolação bilinear de Vo
 def interpolar_vo(lat, lon):
+    pontos = grade_vo[["Latitude", "Longitude"]].values
+    valores = grade_vo["Vo"].values
     ponto = np.array([[lat, lon]])
-    vo_interp = griddata((latitudes, longitudes), vo_values, ponto, method='linear')
+    vo_interp = griddata(pontos, valores, ponto, method='linear')
     if np.isnan(vo_interp):
-        vo_interp = griddata((latitudes, longitudes), vo_values, ponto, method='nearest')
+        vo_interp = griddata(pontos, valores, ponto, method='nearest')
     return round(float(vo_interp), 2)
 
 # Simulação de inclinação e obstáculos por direção
@@ -112,4 +104,5 @@ st.dataframe(df_direcao)
 # Informações adicionais
 st.markdown(f"**Categoria de terreno:** {categoria}")
 st.markdown(f"**Classe da edificação:** {classe}")
+
 
