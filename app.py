@@ -1,97 +1,101 @@
 
 import streamlit as st
+import pandas as pd
+import numpy as np
 
-# Funções auxiliares
-def calcular_vo(lat):
-    # Simulação simplificada com base na latitude
-    if lat >= -5:
+st.set_page_config(page_title="Parâmetros de Vento - NBR 6123", layout="wide")
+
+st.title("🌬️ Cálculo dos Parâmetros de Vento conforme NBR 6123:1988")
+
+# Inputs
+col1, col2, col3 = st.columns(3)
+with col1:
+    latitude = st.number_input("Latitude", format="%.6f")
+with col2:
+    longitude = st.number_input("Longitude", format="%.6f")
+with col3:
+    altura_torre = st.number_input("Altura da torre (m)", min_value=1.0, format="%.2f")
+
+# Função para interpolar Vo (exemplo simplificado)
+def interpolar_vo(lat):
+    if lat < -30:
         return 30.0
-    elif lat >= -15:
+    elif lat < -20:
         return 35.0
-    elif lat >= -25:
+    elif lat < -10:
         return 40.0
     else:
         return 45.0
 
-def calcular_s1(inclinacoes):
-    s1 = 1.0
-    for inc in inclinacoes:
-        if inc < 3:
-            fator = 0.85
-        elif inc < 5:
-            fator = 0.90
-        elif inc < 7:
-            fator = 1.00
-        elif inc < 9:
-            fator = 1.05
-        else:
-            fator = 1.10
-        s1 = max(s1, fator)
-    return s1
-
-def calcular_s2(obstaculos):
-    media = sum(obstaculos) / len(obstaculos)
-    if media < 5:
-        return 0.95
-    elif media < 10:
-        return 1.00
-    else:
-        return 1.05
-
-def obter_s3(grupo):
-    tabela = {
-        "1": 1.10,
-        "2": 1.00,
-        "3": 0.95,
-        "4": 0.88,
-        "5": 0.83
-    }
-    return tabela.get(grupo, 1.00)
-
-# Interface Streamlit
-st.set_page_config(page_title="Parâmetros de Vento - NBR 6123", layout="centered")
-st.title("🌬️ Cálculo dos Parâmetros de Vento - NBR 6123:1988")
-
-st.markdown("Preencha os dados abaixo para calcular automaticamente os parâmetros de vento:")
-
-# Inputs
-col1, col2 = st.columns(2)
-with col1:
-    lat = st.number_input("Latitude (decimal)", value=-20.0)
-    altura = st.number_input("Altura da torre (m)", value=40.0)
-with col2:
-    lon = st.number_input("Longitude (decimal)", value=-45.0)
-    grupo = st.selectbox("Grupo estrutural", ["1", "2", "3", "4", "5"])
-
-categoria = st.selectbox("Categoria de terreno", ["I", "II", "III", "IV", "V"])
-classe = st.selectbox("Classe da edificação", ["A", "B", "C"])
-
-# Simulação de dados por direção
+# Simulação de inclinação e obstáculos por direção
 direcoes = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
-inclinacoes = [4.5 + i * 0.5 + abs(lat % 1) for i in range(8)]
-obstaculos = [3.5 + i * 0.3 + abs(lon % 1) for i in range(8)]
+inclinacoes = [4.5 + i * 0.5 + abs(latitude % 1) for i in range(8)]
+obstaculos = [3.0 + i * 0.3 + abs(longitude % 1) for i in range(8)]
 
-# Cálculos
-vo = calcular_vo(lat)
-s1 = calcular_s1(inclinacoes)
-s2 = calcular_s2(obstaculos)
-s3 = obter_s3(grupo)
+# Cálculo de S1 por direção
+def calcular_s1(inclinacao):
+    if inclinacao < 3:
+        return 0.85
+    elif inclinacao < 5:
+        return 0.90
+    elif inclinacao < 7:
+        return 1.00
+    elif inclinacao < 9:
+        return 1.05
+    else:
+        return 1.10
+
+s1_direcoes = [calcular_s1(inc) for inc in inclinacoes]
+s1 = max(s1_direcoes)
+
+# Cálculo de S2 pela menor média de obstáculos
+media_obstaculos = [round(o, 2) for o in obstaculos]
+menor_media = min(media_obstaculos)
+if menor_media < 5:
+    categoria = "II"
+    s2 = 0.95
+elif menor_media < 10:
+    categoria = "III"
+    s2 = 1.00
+else:
+    categoria = "IV"
+    s2 = 1.05
+
+# Classe da edificação
+if altura_torre <= 20:
+    classe = "A"
+elif altura_torre <= 50:
+    classe = "B"
+else:
+    classe = "C"
+
+# S3 fixo
+s3 = 1.0
+
+# Vo interpolado
+vo = interpolar_vo(latitude)
+
+# Vk
 vk = round(vo * s1 * s2 * s3, 2)
 
 # Resultados
-st.subheader("📊 Resultados")
-st.write(f"**Vo (m/s):** {vo}")
-st.write(f"**S1:** {s1}")
-st.write(f"**S2:** {s2}")
-st.write(f"**S3:** {s3}")
-st.write(f"**Vk (m/s):** {vk}")
+st.subheader("📊 Resultados dos Parâmetros")
+df_result = pd.DataFrame({
+    "Parâmetro": ["Vo (m/s)", "S1", "S2", "S3", "Vk (m/s)"],
+    "Valor": [vo, s1, s2, s3, vk]
+})
+st.table(df_result)
 
 # Tabela por direção
-st.subheader("📈 Dados por direção")
-import pandas as pd
-df = pd.DataFrame({
+st.subheader("📈 Inclinação e Obstáculos por Direção")
+df_direcao = pd.DataFrame({
     "Direção": direcoes,
     "Inclinação (°)": [round(i, 2) for i in inclinacoes],
-    "Altura média dos obstáculos (m)": [round(o, 2) for o in obstaculos]
+    "S1": s1_direcoes,
+    "Altura média dos obstáculos (m)": media_obstaculos
 })
-st.dataframe(df)
+st.dataframe(df_direcao)
+
+# Informações adicionais
+st.markdown(f"**Categoria de terreno:** {categoria}")
+st.markdown(f"**Classe da edificação:** {classe}")
